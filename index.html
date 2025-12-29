@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RemoteView</title>
+    <style>
+        body { margin:0; background:#111; }
+        #screen { width:100vw; height:100vh; cursor: crosshair; }
+        .controls { position:fixed; top:10px; left:10px; background:#0009; padding:10px; border-radius:5px; }
+        button { background:#f00; color:white; border:none; padding:5px 10px; margin:2px; }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <button onclick="capture()">Захват экрана</button>
+        <button onclick="lockMouse()">Блокировка мыши</button>
+        <input type="text" id="idBox" placeholder="ID сессии">
+        <button onclick="connect()">Подключиться</button>
+    </div>
+    <img id="screen" src="" onclick="sendClick(event)"/>
+    <script>
+        let ws = null;
+        const sessionId = Math.random().toString(36).substring(7);
+        
+        function connect() {
+            const id = document.getElementById('idBox').value || sessionId;
+            ws = new WebSocket(`wss://your-site.netlify.app/.netlify/functions/ws?targetId=${id}`);
+            
+            ws.onmessage = (e) => {
+                const blob = new Blob([e.data], {type: 'image/jpeg'});
+                document.getElementById('screen').src = URL.createObjectURL(blob);
+            };
+            
+            ws.onopen = () => {
+                ws.send(JSON.stringify({type:'control', data:'register_controller'}));
+                setInterval(() => ws.send(JSON.stringify({type:'control', data:'heartbeat'})), 5000);
+            };
+        }
+        
+        function capture() {
+            ws.send(JSON.stringify({type:'control', data:'capture'}));
+        }
+        
+        function sendClick(e) {
+            const rect = e.target.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / rect.width;
+            const y = (e.clientY - rect.top) / rect.height;
+            ws.send(JSON.stringify({
+                type: 'mouse',
+                data: {action:'click', x, y}
+            }));
+        }
+        
+        function lockMouse() {
+            ws.send(JSON.stringify({type:'control', data:'lock_mouse'}));
+        }
+        
+        // Автоподключение через 3 сек
+        setTimeout(() => {
+            document.getElementById('idBox').value = sessionId;
+            connect();
+        }, 3000);
+    </script>
+</body>
+</html>
